@@ -1,34 +1,33 @@
 #pragma once
 
-#include <cassert>
 #include <vector>
 #include <memory>
 #include <mutex>
 
-#include "../Strategies/abstract_mass_strategy.h"
+#include "../../../Policies/abstract_mass_policy.h"
+#include "../../abstract_tree.h"
 
-template<typename T, typename M>
-class ParallelSegmentTree {
+template<typename T, typename M, typename P, size_t ThreadsCount = 1>
+class ParallelSegmentTree_V1 : public AbstractTree<T, M, P> {
  private:
   struct Node;
  public:
-  explicit ParallelSegmentTree(const std::vector<T>& values,
-                std::shared_ptr<AbstractMassPolicy<T, M>>&& strategy)
-      : strategy_(strategy) {
-    // TODO: need mutex?
-    size_ = ProperSize(values.size());
-    tree_ = std::vector<Node>(2 * size_, {strategy->GetNullState(), M(), false});
-    mutexes_ = std::vector<std::mutex>(2 * size_);
-    Build(values, 0, 0, size_);
+  template<class Iter>
+  explicit ParallelSegmentTree_V1(Iter begin, Iter end, P policy)
+      : AbstractTree<T, M, P>(std::move(policy)) {
+    size_ = ProperSize(std::distance(begin, end));
+    tree_ = std::vector<Node>(2 * size_,
+                              {this->policy_.GetNullState(), M(), false});
+    Build(begin, std::distance(begin, end), 0, 0, size_);
   }
 
-  void ModifyTree(size_t l, size_t r, M modifier) {
-    assert(l < r);
-    std::lock_guard<std::mutex> lock(mutexes_.front());
+  void ModifyTree(size_t l, size_t r, M modifier) override {
+    std::lock_guard<std::mutex> guard(lock_);
     Modify(l, r, modifier, 0, 0, size_);
   }
 
-  T GetTreeState(size_t l, size_t r) {
+  T GetTreeState(size_t l, size_t r) override {
+    std::lock_guard<std::mutex> guard(lock_);
     return GetState(l, r, 0, 0, size_);
   }
 
@@ -42,44 +41,44 @@ class ParallelSegmentTree {
   }
 
   void Propagate(size_t pos, size_t l, size_t r) {
-    assert(l < r);
-    assert(pos >= 0 && pos < tree_.size());
     auto& node = tree_[pos];
     if (!node.has_operation) {
       return;
     }
     if (r - l == 1) {
-      node.state = strategy_->GetModifiedState(node.state, 1, node.modifier);
+      node.state =
+          this->policy_.GetModifiedState(node.state, 1, node.modifier);
       node.has_operation = false;
       return;
     }
-    assert(pos * 2 + 2 < tree_.size());
     size_t mid = (r + l) >> 1;
     size_t left = (pos << 1) + 1;
     auto& left_node = tree_[left];
     size_t right = left + 1;
     auto& right_node = tree_[right];
     left_node.state =
-        strategy_->GetModifiedState(left_node.state, mid - l, node.modifier);
+        this->policy_.GetModifiedState(left_node.state,
+                                       mid - l,
+                                       node.modifier);
     left_node.modifier = node.modifier;
     left_node.has_operation = true;
 
     right_node.state =
-        strategy_->GetModifiedState(right_node.state, r - mid, node.modifier);
+        this->policy_.GetModifiedState(right_node.state,
+                                       r - mid,
+                                       node.modifier);
     right_node.modifier = node.modifier;
     right_node.has_operation = true;
 
-    node.state = strategy_->GetState(left_node.state, right_node.state);
+    node.state = this->policy_.GetState(left_node.state, right_node.state);
     node.has_operation = false;
   }
 
   void Modify(size_t searching_l, size_t searching_r, M modifier,
               size_t pos, size_t l, size_t r) {
-    assert(l < r);
-    assert(searching_l >= l && searching_r <= r);
-    // std::lock_guard<std::mutex> lock(mutexes_[pos]);
     if (searching_l == l && searching_r == r) {
-      tree_[pos].state = strategy_->GetModifiedState(tree_[pos].state, r - l, modifier);
+      tree_[pos].state =
+          this->policy_.GetModifiedState(tree_[pos].state, r - l, modifier);
       tree_[pos].modifier = modifier;
       tree_[pos].has_operation = true;
       return;
@@ -97,14 +96,11 @@ class ParallelSegmentTree {
       Modify(mid, searching_r, modifier, right, mid, r);
     }
     tree_[pos].state =
-        strategy_->GetState(tree_[left].state, tree_[right].state);
+        this->policy_.GetState(tree_[left].state, tree_[right].state);
   }
 
   T GetState(size_t searching_l, size_t searching_r,
              size_t pos, size_t l, size_t r) {
-    assert(l < r);
-    assert(searching_l >= l && searching_r <= r);
-    // std::lock_guard<std::mutex> lock(mutexes_[pos]);
     Propagate(pos, l, r);
     if (searching_l == l && searching_r == r) {
       return tree_[pos].state;
@@ -118,30 +114,29 @@ class ParallelSegmentTree {
     if (searching_l >= mid) {
       return GetState(searching_l, searching_r, right, mid, r);
     }
-    return strategy_->GetState(GetState(searching_l, mid, left, l, mid),
-                               GetState(mid, searching_r, right, mid, r));
+    return this->policy_.GetState(GetState(searching_l, mid, left, l, mid),
+                                  GetState(mid, searching_r, right, mid, r));
   }
 
-  void Build(const std::vector<T>& values, size_t pos, size_t l, size_t r) {
-    assert (l < r);
+  template<class Iter>
+  void Build(Iter begin, size_t array_size, size_t pos, size_t l, size_t r) {
     if (r - l == 1) {
-      if (l < values.size()) {
-        tree_[pos].state = values[l];
+      if (l < array_size) {
+        tree_[pos].state = *std::next(begin, l);
       }
       return;
     }
     size_t mid = (l + r) >> 1;
     size_t left = (pos << 1) + 1;
     size_t right = left + 1;
-    Build(values, left, l, mid);
-    Build(values, right, mid, r);
+    Build(begin, array_size, left, l, mid);
+    Build(begin, array_size, right, mid, r);
     tree_[pos].state =
-        strategy_->GetState(tree_[left].state, tree_[right].state);
+        this->policy_.GetState(tree_[left].state, tree_[right].state);
   }
 
   std::vector<Node> tree_;
-  std::vector<std::mutex> mutexes_;
-  std::shared_ptr<AbstractMassPolicy<T, M>> strategy_;
+  std::mutex lock_;
   size_t size_;
   struct Node {
     T state;

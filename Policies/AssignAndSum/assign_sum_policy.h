@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../abstract_mass_strategy.h"
+#include "../abstract_mass_policy.h"
 
 template<typename T>
 class AssignSumStrategy : public AbstractMassPolicy<T, T> {

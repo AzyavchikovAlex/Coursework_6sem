@@ -8,10 +8,10 @@
 #include <mutex>
 #include <thread>
 
-#include "../../../Policies/abstract_mass_policy.h"
-#include "../../abstract_tree.h"
-#include "../Version1/tree_v1.h"
-#include "../../../Utils/buffered_channel.h"
+#include "Policies/abstract_mass_policy.h"
+#include "SegmentTrees/abstract_tree.h"
+#include "SegmentTrees/ParrallelTrees/Version1/tree_v1.h"
+#include "Utils/buffered_channel.h"
 
 template<typename T, typename M, typename P, size_t ThreadsCount = 8>
 class ParallelSegmentTree_V2 : public AbstractTree<T, M, P> {

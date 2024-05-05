@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "tree_v1.h"
-#include "../../../Utils/test_templates.h"
+#include "Utils/test_templates.h"
 
 TEST(TreeV1, SimpleTest) {
   SimpleTest<ParallelSegmentTree_V1>();

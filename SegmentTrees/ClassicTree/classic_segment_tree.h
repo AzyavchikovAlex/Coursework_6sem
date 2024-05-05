@@ -6,7 +6,7 @@
 #include "../../Policies/abstract_mass_policy.h"
 #include "../abstract_tree.h"
 
-template<typename T, typename M, typename P, size_t>
+template<typename T, typename M, typename P, size_t ThreadsCount = 0>
 class Tree : public AbstractTree<T, M, P> {
  private:
   struct Node;

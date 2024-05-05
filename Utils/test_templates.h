@@ -4,11 +4,12 @@
 #include <gtest/gtest.h>
 #include <chrono>
 
-#include "../SegmentTrees/abstract_tree.h"
-#include "../SegmentTrees/ClassicTree/assign_sum_tree.h"
-#include "../SegmentTrees/ClassicTree/classic_segment_tree.h"
-#include "../Policies/AssignAndSum/assign_sum_policy.h"
-#include "../Benchmarks/bench.h"
+#include "SegmentTrees/ClassicTree/classic_segment_tree.h"
+#include "SegmentTrees/abstract_tree.h"
+#include "SegmentTrees/ClassicTree/assign_sum_tree.h"
+#include "SegmentTrees/ClassicTree/classic_segment_tree.h"
+#include "Policies/AssignAndSum/assign_sum_policy.h"
+#include "Benchmarks/bench.h"
 
 template <template<class T, class M, class P, size_t> class TreeType, size_t ThreadsCount>
 std::shared_ptr<AbstractTree<int, int, AssignSumStrategy<int>>> GetTree(const std::vector<int>& values) {
@@ -18,12 +19,24 @@ std::shared_ptr<AbstractTree<int, int, AssignSumStrategy<int>>> GetTree(const st
 
 template <template<class T, class M, class P, size_t> class TreeType>
 void SimpleTest() {
-  std::vector<int> values = {1, 2, 3};
-  auto tree = GetTree<TreeType, 1>(values);
-  EXPECT_EQ(tree->GetTreeState(0, 3), 6);
-  EXPECT_EQ(tree->GetTreeState(0, 2), 3);
-  tree->ModifyTree(0, 1, 5);
-  EXPECT_EQ(tree->GetTreeState(0, 3), 10);
+  {
+    std::vector<int> values = {1, 2, 3};
+    auto tree = GetTree<TreeType, 1>(values);
+    EXPECT_EQ(tree->GetTreeState(0, 3), 6);
+    EXPECT_EQ(tree->GetTreeState(0, 2), 3);
+    tree->ModifyTree(0, 1, 5);
+    EXPECT_EQ(tree->GetTreeState(0, 3), 10);
+    EXPECT_EQ(tree->GetTreeState(0, 3), 10);
+  }{
+    std::vector<int> values = {1, 2, 3, 4, 5};
+    auto tree = GetTree<TreeType, 2>(values);
+    EXPECT_EQ(tree->GetTreeState(0, 6), 15);
+    tree->ModifyTree(0, 1, 5); // {5, 2, 3, 4, 5}
+    EXPECT_EQ(tree->GetTreeState(0, 3), 10);
+    tree->ModifyTree(1, 3, -1); // {5, -1, -1, 4, 5}
+    EXPECT_EQ(tree->GetTreeState(0, 3), 3);
+    EXPECT_EQ(tree->GetTreeState(0, 5), 12);
+  }
 }
 
 template <template<class T, class M, class P, size_t> class TreeType, size_t ThreadsCount = 3>
@@ -57,21 +70,21 @@ void RandomTest() {
   }
 }
 
-template <template<class T, class M, class P, size_t> class TreeType, size_t ThreadsCount = 8>
+template <template<class T, class M, class P, size_t> class TreeType, size_t ThreadsCount = 8, int64_t NanoSeconds = 100000000>
 void BenchmarkTest() {
   size_t n = 1e7;
   std::vector<int> values(n);
   auto tree = GetTree<TreeType, ThreadsCount>(values);
   auto fast_tree = ASTree(values);
 
-  auto t1 = bench::Measure([&tree, &n]() {
+  auto t1 = bench::Measure([&tree, n]() {
     tree->ModifyTree(1, n - 2, 1);
     tree->GetTreeState(1, n - 2);
-  });
-  auto t2 =  bench::Measure([&fast_tree, &n]() {
+  }, std::chrono::nanoseconds(NanoSeconds));
+  auto t2 =  bench::Measure([&fast_tree, n]() {
     fast_tree.ModifyTree(1, n - 2, 1);
     fast_tree.GetTreeState(1, n - 2);
-  });
+  }, std::chrono::nanoseconds(NanoSeconds));
 
   std::cerr << "Testing tree: " <<  t1 << "\n";
   std::cerr << "Fast    tree: " <<  t2 << "\n";
@@ -79,7 +92,7 @@ void BenchmarkTest() {
 }
 
 
-template <template<class T, class M, class P, size_t> class TreeType, size_t ThreadsCount = 8>
+template <template<class T, class M, class P, size_t> class TreeType, size_t ThreadsCount = 8, int64_t NanoSeconds = 100000000>
 void BatchingBenchmarkTest() {
   size_t n = 2e7;
   size_t batch_size = 1000;
@@ -92,13 +105,13 @@ void BatchingBenchmarkTest() {
       tree->ModifyTree(1, n - 2, 1);
     }
     tree->GetTreeState(1, n - 2);
-  }, std::chrono::seconds(3));
+  }, std::chrono::nanoseconds(NanoSeconds));
   auto t2 =  bench::Measure([&fast_tree, n, batch_size]() {
     for (size_t i = 0; i < batch_size; ++i) {
       fast_tree.ModifyTree(1, n - 2, 1);
     }
     fast_tree.GetTreeState(1, n - 2);
-  }, std::chrono::seconds(1));
+  }, std::chrono::nanoseconds(NanoSeconds));
 
   std::cerr << "Testing tree: " <<  t1 << "\n";
   std::cerr << "Fast    tree: " <<  t2 << "\n";

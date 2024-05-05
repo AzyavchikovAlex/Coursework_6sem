@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.24)
 project(Coursework_6sem)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STACK_SIZE 1000000)
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -14,18 +13,26 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 add_executable(MAIN main.cpp)
+#add_executable(TEST_CLASSIC_SEGMENT_TREE
+#        ${ASSIGN_AND_SUM}
+#        Tests/classic_tree_tests.cpp
+#        SegmentTree/classic_segment_tree.h
+#        SegmentTree/assign_sum_tree.h)
+#add_executable(TEST_TREE_V1
+#        ${ASSIGN_AND_SUM}
+#        Tests/parallel_tree_v1_tests.cpp)
 
-add_executable(TESTS
+add_executable(COMMON_TEST
         Benchmarks/bench.cpp
 
         SegmentTrees/ClassicTree/classic_tree_tests.cpp
-        SegmentTrees/ParrallelTrees/Version1/tree_v1_tests.cpp
-        SegmentTrees/ParrallelTrees/Version2/tree_v2_tests.cpp
-        SegmentTrees/ParrallelTrees/Version3/tree_v3_tests.cpp
-        SegmentTrees/ParrallelTrees/Version4/tree_v4_tests.cpp
+        SegmentTrees/ParrallelTrees/Version1/parallel_tree_v1_tests.cpp
+        SegmentTrees/ParrallelTrees/Version2/parallel_tree_v2_tests.cpp
 )
 
-target_link_libraries(TESTS gtest_main)
+#target_link_libraries(TEST_CLASSIC_SEGMENT_TREE gtest_main)
+#target_link_libraries(TEST_TREE_V1 gtest_main)
+target_link_libraries(COMMON_TEST gtest_main)
 
 add_executable(BENCH
         ${ASSIGN_AND_SUM}

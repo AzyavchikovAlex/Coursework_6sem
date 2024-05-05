@@ -4,8 +4,8 @@
 #include <memory>
 #include <mutex>
 
-#include "Policies/abstract_mass_policy.h"
-#include "SegmentTrees/abstract_tree.h"
+#include "../../../Policies/abstract_mass_policy.h"
+#include "../../abstract_tree.h"
 
 template<typename T, typename M, typename P, size_t ThreadsCount = 1>
 class ParallelSegmentTree_V1 : public AbstractTree<T, M, P> {

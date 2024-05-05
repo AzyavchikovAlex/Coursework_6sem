@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "classic_segment_tree.h"
-#include "Utils/test_templates.h"
+#include "../../Utils/test_templates.h"
 
 TEST(ClassicSegmentTree, SimpleTest) {
   SimpleTest<Tree>();

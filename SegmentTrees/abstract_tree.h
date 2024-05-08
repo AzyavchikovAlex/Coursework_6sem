@@ -6,9 +6,10 @@
 
 #include "Policies/abstract_mass_policy.h"
 
-template<typename T, typename M, typename P, size_t ThreadsCount = 0>
+template<typename T, typename M, typename P, size_t /*ThreadsCount*/ = 0>
 class AbstractTree {
  public:
+  AbstractTree() = default;
   explicit AbstractTree(P policy) : policy_(policy) {}
   virtual ~AbstractTree() = default;
 
@@ -20,6 +21,16 @@ class AbstractTree {
     std::promise<T> result;
     result.set_value(GetTreeState(l, r));
     return result.get_future();
+  }
+
+  T GetState(T first_state, T second_state) {
+    return policy_.GetState(first_state, second_state);
+  }
+  T GetNullState() {
+    return policy_.GetNullState();
+  }
+  T GetModifiedState(T init_state, size_t values_count, M modifier) {
+    return policy_.GetModifiedState(init_state, values_count, modifier);
   }
 
  protected:

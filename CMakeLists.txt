@@ -15,7 +15,7 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(MAIN main.cpp)
 
-add_executable(TESTS
+add_executable(COMMON_TEST
         Benchmarks/bench.cpp
 
         SegmentTrees/ClassicTree/classic_tree_tests.cpp
@@ -23,9 +23,10 @@ add_executable(TESTS
         SegmentTrees/ParrallelTrees/Version2/tree_v2_tests.cpp
         SegmentTrees/ParrallelTrees/Version3/tree_v3_tests.cpp
         SegmentTrees/ParrallelTrees/Version4/tree_v4_tests.cpp
+        SegmentTrees/ParrallelTrees/Version5/tree_v5_tests.cpp
 )
 
-target_link_libraries(TESTS gtest_main)
+target_link_libraries(COMMON_TEST gtest_main)
 
 add_executable(BENCH
         ${ASSIGN_AND_SUM}

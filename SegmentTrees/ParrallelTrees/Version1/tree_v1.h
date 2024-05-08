@@ -28,7 +28,7 @@ class ParallelSegmentTree_V1 : public AbstractTree<T, M, P> {
 
   T GetTreeState(size_t l, size_t r) override {
     std::lock_guard<std::mutex> guard(lock_);
-    return GetState(l, r, 0, 0, size_);
+    return GetTreeState(l, r, 0, 0, size_);
   }
 
  private:
@@ -46,8 +46,7 @@ class ParallelSegmentTree_V1 : public AbstractTree<T, M, P> {
       return;
     }
     if (r - l == 1) {
-      node.state =
-          this->policy_.GetModifiedState(node.state, 1, node.modifier);
+      node.state = this->GetModifiedState(node.state, 1, node.modifier);
       node.has_operation = false;
       return;
     }
@@ -56,21 +55,19 @@ class ParallelSegmentTree_V1 : public AbstractTree<T, M, P> {
     auto& left_node = tree_[left];
     size_t right = left + 1;
     auto& right_node = tree_[right];
-    left_node.state =
-        this->policy_.GetModifiedState(left_node.state,
-                                       mid - l,
-                                       node.modifier);
+    left_node.state = this->GetModifiedState(left_node.state,
+                                             mid - l,
+                                             node.modifier);
     left_node.modifier = node.modifier;
     left_node.has_operation = true;
 
-    right_node.state =
-        this->policy_.GetModifiedState(right_node.state,
-                                       r - mid,
-                                       node.modifier);
+    right_node.state = this->GetModifiedState(right_node.state,
+                                              r - mid,
+                                              node.modifier);
     right_node.modifier = node.modifier;
     right_node.has_operation = true;
 
-    node.state = this->policy_.GetState(left_node.state, right_node.state);
+    node.state = this->GetState(left_node.state, right_node.state);
     node.has_operation = false;
   }
 
@@ -78,7 +75,7 @@ class ParallelSegmentTree_V1 : public AbstractTree<T, M, P> {
               size_t pos, size_t l, size_t r) {
     if (searching_l == l && searching_r == r) {
       tree_[pos].state =
-          this->policy_.GetModifiedState(tree_[pos].state, r - l, modifier);
+          this->GetModifiedState(tree_[pos].state, r - l, modifier);
       tree_[pos].modifier = modifier;
       tree_[pos].has_operation = true;
       return;
@@ -95,12 +92,11 @@ class ParallelSegmentTree_V1 : public AbstractTree<T, M, P> {
       Modify(searching_l, mid, modifier, left, l, mid);
       Modify(mid, searching_r, modifier, right, mid, r);
     }
-    tree_[pos].state =
-        this->policy_.GetState(tree_[left].state, tree_[right].state);
+    tree_[pos].state = this->GetState(tree_[left].state, tree_[right].state);
   }
 
-  T GetState(size_t searching_l, size_t searching_r,
-             size_t pos, size_t l, size_t r) {
+  T GetTreeState(size_t searching_l, size_t searching_r,
+                 size_t pos, size_t l, size_t r) {
     Propagate(pos, l, r);
     if (searching_l == l && searching_r == r) {
       return tree_[pos].state;
@@ -109,13 +105,13 @@ class ParallelSegmentTree_V1 : public AbstractTree<T, M, P> {
     size_t left = (pos << 1) + 1;
     size_t right = left + 1;
     if (searching_r <= mid) {
-      return GetState(searching_l, searching_r, left, l, mid);
+      return GetTreeState(searching_l, searching_r, left, l, mid);
     }
     if (searching_l >= mid) {
-      return GetState(searching_l, searching_r, right, mid, r);
+      return GetTreeState(searching_l, searching_r, right, mid, r);
     }
-    return this->policy_.GetState(GetState(searching_l, mid, left, l, mid),
-                                  GetState(mid, searching_r, right, mid, r));
+    return this->GetState(GetTreeState(searching_l, mid, left, l, mid),
+                          GetTreeState(mid, searching_r, right, mid, r));
   }
 
   template<class Iter>
@@ -131,8 +127,7 @@ class ParallelSegmentTree_V1 : public AbstractTree<T, M, P> {
     size_t right = left + 1;
     Build(begin, array_size, left, l, mid);
     Build(begin, array_size, right, mid, r);
-    tree_[pos].state =
-        this->policy_.GetState(tree_[left].state, tree_[right].state);
+    tree_[pos].state = this->GetState(tree_[left].state, tree_[right].state);
   }
 
   std::vector<Node> tree_;

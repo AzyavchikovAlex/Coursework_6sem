@@ -13,14 +13,26 @@ TEST(TreeV3, RandomTest) {
 }
 
 TEST(TreeV3, BenchmarkTest) {
+  std::cerr << "TreeV3 2 threads\n";
+  BenchmarkTest<ParallelSegmentTree_V3, 2, 2'000'000'000>();
+  std::cerr << "-----------------------------------------------\n";
   std::cerr << "TreeV3 4 threads\n";
-  BenchmarkTest<ParallelSegmentTree_V3, 6, 2'000'000'000>();
+  BenchmarkTest<ParallelSegmentTree_V3, 4, 2'000'000'000>();
   std::cerr << "-----------------------------------------------\n";
   std::cerr << "TreeV3 6 threads\n";
   BenchmarkTest<ParallelSegmentTree_V3, 6, 2'000'000'000>();
   std::cerr << "-----------------------------------------------\n";
-  std::cerr << "TreeV3 8 threads\n";
-  BenchmarkTest<ParallelSegmentTree_V3, 8, 2'000'000'000>();
+}
+
+TEST(TreeV3, SlowDataBenchmarkTest) {
+  std::cerr << "TreeV3 2 threads (slow data)\n";
+  SlowDataBenchmarkTest<ParallelSegmentTree_V3, 2, 2'000'000'000>();
+  std::cerr << "-----------------------------------------------\n";
+  std::cerr << "TreeV3 4 threads (slow data)\n";
+  SlowDataBenchmarkTest<ParallelSegmentTree_V3, 4, 2'000'000'000>();
+  std::cerr << "-----------------------------------------------\n";
+  std::cerr << "TreeV3 6 threads (slow data)\n";
+  SlowDataBenchmarkTest<ParallelSegmentTree_V3, 6, 2'000'000'000>();
   std::cerr << "-----------------------------------------------\n";
 }
 

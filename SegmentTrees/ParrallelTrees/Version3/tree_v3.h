@@ -10,14 +10,14 @@
 
 #include "Policies/abstract_mass_policy.h"
 #include "SegmentTrees/abstract_tree.h"
-#include "SegmentTrees/ParrallelTrees/Version1/tree_v1.h"
-#include "Utils/buffered_channel.h"
+#include "SegmentTrees/ClassicTree/classic_segment_tree.h"
 #include "Utils/fast_queue.h"
 
 template<typename T, typename M, typename P, size_t ThreadsCount = 8>
 class ParallelSegmentTree_V3 : public AbstractTree<T, M, P> {
  private:
   struct Query;
+  struct Response;
  public:
   template<class Iter>
   explicit ParallelSegmentTree_V3(Iter begin, Iter end, P policy)
@@ -31,12 +31,11 @@ class ParallelSegmentTree_V3 : public AbstractTree<T, M, P> {
       size_t r_border =
           index + 1 == ThreadsCount ? std::distance(begin, end) : (index + 1)
               * chunk_size;
-      auto tree =
-          std::make_shared<ParallelSegmentTree_V1<T, M, P>>(std::next(begin,
-                                                                      l_border),
-                                                            std::next(begin,
-                                                                      r_border),
-                                                            policy);
+      auto tree = std::make_shared<Tree<T, M, P>>(std::next(begin,
+                                                            l_border),
+                                                  std::next(begin,
+                                                            r_border),
+                                                  this->policy_);
       channels_[index] = std::make_shared<MPMCBoundedQueue<Query>>(kBufferSize);
       threads_pool_.emplace_back(&ParallelSegmentTree_V3::RunThread,
                                  this,
@@ -48,7 +47,7 @@ class ParallelSegmentTree_V3 : public AbstractTree<T, M, P> {
   }
 
   virtual  ~ParallelSegmentTree_V3() {
-    stop_threads.test_and_set();
+    stop_threads_.test_and_set();
     for (size_t index = 0; index < ThreadsCount; ++index) {
       threads_pool_[index].join();
     }
@@ -56,58 +55,70 @@ class ParallelSegmentTree_V3 : public AbstractTree<T, M, P> {
   }
 
   void ModifyTree(size_t l, size_t r, M modifier) override {
-    all_tasks_completed.clear();
     Query q = {modifier, l, r};
     for (size_t index = 0; index < ThreadsCount; ++index) {
       while (!channels_[index]->Enqueue(q)) {
-
       }
     }
   }
 
-  T GetTreeState(size_t l, size_t r) override {
-    last_asked_state_ = this->policy_.GetNullState();
-    counter_ = 0;
-    all_tasks_completed.clear();
-    Query q = {std::nullopt, l, r};
+  std::future<T> GetFutureTreeState(size_t l, size_t r) override {
+    Query q = {std::nullopt, l, r, Response{std::make_shared<std::promise<T>>(),
+                                            std::make_shared<std::atomic<T>>(
+                                                this->GetNullState()),
+                                            std::make_shared<std::atomic<int>>(0)}};
     for (size_t index = 0; index < ThreadsCount; ++index) {
       while (!channels_[index]->Enqueue(q)) {
       }
     }
-    while (!all_tasks_completed.test()) {
+    return q.response.result->get_future();
+  }
 
-    }
-    return last_asked_state_;
+  T GetTreeState(size_t l, size_t r) override {
+    return GetFutureTreeState(l, r).get();
   }
 
  private:
   struct Query {
-    std::optional<M> modifier;
-    size_t l, r;
+    std::optional<M> modifier{std::nullopt};
+    size_t l{0}, r{0};
+    Response response{};
+  };
+  struct Response {
+    std::shared_ptr<std::promise<T>> result{nullptr};
+    std::shared_ptr<std::atomic<T>> state{nullptr};
+    std::shared_ptr<std::atomic<int>> counter{nullptr};
   };
   std::vector<std::thread> threads_pool_;
-  static constexpr size_t kBufferSize = 1;
+  static constexpr size_t kBufferSize = 1024;
   std::array<std::shared_ptr<MPMCBoundedQueue<Query>>, ThreadsCount> channels_;
-  std::atomic<T> last_asked_state_;
-  std::atomic_int counter_;
-  std::atomic_flag all_tasks_completed = ATOMIC_FLAG_INIT;
-  std::atomic_flag stop_threads = ATOMIC_FLAG_INIT;
+  std::atomic_flag stop_threads_ = ATOMIC_FLAG_INIT;
 
-  void FinishTask() {
-    auto value = counter_.fetch_add(1) + 1;
+  void FinishTask(Response& response) {
+    auto value = response.counter->fetch_add(1) + 1;
     if (value == ThreadsCount) {
-      all_tasks_completed.test_and_set();
+      response.result->set_value(response.state->load());
     }
   }
 
-  void RunThread(std::shared_ptr<AbstractTree<T, M, P>> tree,
+  void FinishTask(Response& response, T sub_state) {
+    for (auto old_state = response.state->load();;) {
+      auto new_state = this->GetState(old_state, sub_state);
+      if (response.state->compare_exchange_strong(old_state, new_state)) {
+        break;
+      }
+    }
+    FinishTask(response);
+  }
+
+  void RunThread(std::shared_ptr<Tree<T, M, P>> tree,
                  std::shared_ptr<MPMCBoundedQueue<Query>> channel,
                  size_t l_border,
                  size_t r_border) {
     for (;;) {
       Query query;
       while (!channel->Dequeue(query)) {
-        if (stop_threads.test()) {
+        if (stop_threads_.test()) {
           return;
         }
       }
@@ -115,7 +126,7 @@ class ParallelSegmentTree_V3 : public AbstractTree<T, M, P> {
       auto r = std::min(query.r, r_border);
       if (l >= r) {
         if (!query.modifier.has_value()) {
-          FinishTask();
+          FinishTask(query.response);
         }
         continue;
       }
@@ -127,14 +138,7 @@ class ParallelSegmentTree_V3 : public AbstractTree<T, M, P> {
       }
 
       auto sub_state = tree->GetTreeState(l, r);
-      for (auto old_state = last_asked_state_.load();;) {
-        auto new_state = this->policy_.GetState(old_state, sub_state);
-        if (last_asked_state_.compare_exchange_strong(old_state,
-                                                      new_state)) {
-          FinishTask();
-          break;
-        }
-      }
+      FinishTask(query.response, sub_state);
     }
   }
 

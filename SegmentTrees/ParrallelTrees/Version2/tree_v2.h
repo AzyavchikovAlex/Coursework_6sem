@@ -10,13 +10,14 @@
 
 #include "Policies/abstract_mass_policy.h"
 #include "SegmentTrees/abstract_tree.h"
-#include "SegmentTrees/ParrallelTrees/Version1/tree_v1.h"
+#include "SegmentTrees/ClassicTree/classic_segment_tree.h"
 #include "Utils/buffered_channel.h"
 
 template<typename T, typename M, typename P, size_t ThreadsCount = 8>
 class ParallelSegmentTree_V2 : public AbstractTree<T, M, P> {
  private:
   struct Query;
+  struct Response;
  public:
   template<class Iter>
   explicit ParallelSegmentTree_V2(Iter begin, Iter end, P policy)
@@ -30,48 +31,13 @@ class ParallelSegmentTree_V2 : public AbstractTree<T, M, P> {
       size_t r_border =
           index + 1 == ThreadsCount ? std::distance(begin, end) : (index + 1)
               * chunk_size;
-      trees_.push_back(
-          std::make_shared<ParallelSegmentTree_V1<T, M, P>>(std::next(begin,
+      auto tree = std::make_shared<Tree<T, M, P>>(std::next(begin,
                                                                       l_border),
                                                             std::next(begin,
                                                                       r_border),
-                                                            policy));
-      channels_[index] =
-          std::make_shared<BufferedChannel<Query>>(
-              kBufferSize);
-      threads_pool_.emplace_back([this, index, l_border, r_border,
-                                     tasks_count = ThreadsCount]() {
-        for (;;) {
-          auto query = channels_[index]->Recv();
-          if (!query.has_value()) {
-            break;
-          }
-          auto l = std::max(query->l, l_border);
-          auto r = std::min(query->r, r_border);
-          if (l >= r) {
-            if (!query->modifier.has_value()) {
-              FinishTask();
-            }
-            continue;
-          }
-          l -= l_border;
-          r -= l_border;
-          if (query->modifier.has_value()) {
-            trees_[index]->ModifyTree(l, r, query->modifier.value());
-            continue;
-          }
-
-          auto sub_state = trees_[index]->GetTreeState(l, r);
-          for (auto old_state = last_asked_state_.load();;) {
-            auto new_state = this->policy_.GetState(old_state, sub_state);
-            if (last_asked_state_.compare_exchange_strong(old_state,
-                                                          new_state)) {
-              FinishTask();
-              break;
-            }
-          }
-        }
-      });
+                                                            this->policy_);
+      channels_[index] = std::make_shared<BufferedChannel<Query>>(kBufferSize);
+      threads_pool_.emplace_back(&ParallelSegmentTree_V2::RunThread, this, tree, channels_[index], l_border, r_border);
     }
   }
 
@@ -92,37 +58,78 @@ class ParallelSegmentTree_V2 : public AbstractTree<T, M, P> {
     }
   }
 
-  T GetTreeState(size_t l, size_t r) override {
-    last_asked_state_ = this->policy_.GetNullState();
-    counter_ = 0;
-    all_tasks_completed.clear();
-    Query q = {std::nullopt, l, r};
+  std::future<T> GetFutureTreeState(size_t l, size_t r) override {
+    Query q = {std::nullopt, l, r, Response{std::make_shared<std::promise<T>>(),
+                                            std::make_shared<std::atomic<T>>(this->GetNullState()),
+                                            std::make_shared<std::atomic<int>>(0)}};
     for (size_t index = 0; index < ThreadsCount; ++index) {
       channels_[index]->Send(q);
     }
-    all_tasks_completed.wait(false);
-    return last_asked_state_;
+    return q.response.result->get_future();
+  }
+
+  T GetTreeState(size_t l, size_t r) override {
+    return GetFutureTreeState(l, r).get();
   }
 
  private:
   struct Query {
-    std::optional<M> modifier;
-    size_t l, r;
+    std::optional<M> modifier{std::nullopt};
+    size_t l{0}, r{0};
+    Response response{};
   };
-  std::vector<std::shared_ptr<AbstractTree<T, M, P>>> trees_;
+  struct Response {
+    std::shared_ptr<std::promise<T>> result{nullptr};
+    std::shared_ptr<std::atomic<T>> state{nullptr};
+    std::shared_ptr<std::atomic<int>> counter{nullptr};
+  };
   std::vector<std::thread> threads_pool_;
-  static constexpr size_t kBufferSize = 500'000;
-  std::array<std::shared_ptr<BufferedChannel<Query>>,
-             ThreadsCount> channels_;
-  std::atomic<T> last_asked_state_;
-  std::atomic_int counter_;
-  std::atomic_flag all_tasks_completed = ATOMIC_FLAG_INIT;
+  static constexpr size_t kBufferSize = 1024;
+  std::array<std::shared_ptr<BufferedChannel<Query>>, ThreadsCount> channels_;
 
-  void FinishTask() {
-    ++counter_;
-    if (counter_.load() == ThreadsCount) {
-      all_tasks_completed.test_and_set();
-      all_tasks_completed.notify_one();
+  void FinishTask(Response& response) {
+    auto value = response.counter->fetch_add(1) + 1;
+    if (value == ThreadsCount) {
+      response.result->set_value(response.state->load());
+    }
+  }
+
+  void FinishTask(Response& response, T sub_state) {
+    for (auto old_state = response.state->load();;) {
+      auto new_state = this->GetState(old_state, sub_state);
+      if (response.state->compare_exchange_strong(old_state, new_state)) {
+        break;
+      }
+    }
+    FinishTask(response);
+  }
+
+  void RunThread(std::shared_ptr<Tree<T, M, P>> tree,
+                 std::shared_ptr<BufferedChannel<Query>> channel,
+                 size_t l_border,
+                 size_t r_border) {
+    for (;;) {
+      auto query = channel->Recv();
+      if (!query.has_value()) {
+        break;
+      }
+      auto l = std::max(query->l, l_border);
+      auto r = std::min(query->r, r_border);
+      if (l >= r) {
+        if (!query->modifier.has_value()) {
+          FinishTask(query->response);
+        }
+        continue;
+      }
+      l -= l_border;
+      r -= l_border;
+      if (query->modifier.has_value()) {
+        tree->ModifyTree(l, r, query->modifier.value());
+        continue;
+      }
+
+      auto sub_state = tree->GetTreeState(l, r);
+      FinishTask(query->response, sub_state);
     }
   }
 

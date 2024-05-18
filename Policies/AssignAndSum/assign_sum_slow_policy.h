@@ -33,7 +33,10 @@ class AssignSumSlowPolicy : public AbstractMassPolicy<T, T> {
     return modifier * static_cast<T>(values_count);
   }
 
+  void SetDuration(uint new_duration) {
+    duration = std::chrono::nanoseconds(new_duration);
+  }
+
  private:
-  std::chrono::nanoseconds duration{500};
-  // std::chrono::nanoseconds duration{100};
+  std::chrono::nanoseconds duration{10'000};
 };

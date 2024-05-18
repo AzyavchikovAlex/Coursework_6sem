@@ -19,22 +19,19 @@ add_executable(COMMON_TEST
         Benchmarks/bench.cpp
 
         SegmentTrees/ClassicTree/classic_tree_tests.cpp
-        SegmentTrees/ParrallelTrees/Version0/tree_v0_tests.cpp
         SegmentTrees/ParrallelTrees/Version1/tree_v1_tests.cpp
         SegmentTrees/ParrallelTrees/Version2/tree_v2_tests.cpp
         SegmentTrees/ParrallelTrees/Version3/tree_v3_tests.cpp
         SegmentTrees/ParrallelTrees/Version4/tree_v4_tests.cpp
+        SegmentTrees/ParrallelTrees/Version5/tree_v5_tests.cpp
 )
 
 target_link_libraries(COMMON_TEST gtest_main)
 
 add_executable(BENCH
-        Benchmarks/bench.cpp
-        Benchmarks/benchmarks.cpp
-)
+        ${ASSIGN_AND_SUM}
 
-add_executable(HELPER
-        Utils/array_builder.cpp
+        Benchmarks/benchmarks.cpp
 )
 
 

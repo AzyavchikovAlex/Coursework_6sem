@@ -4,13 +4,13 @@
 #include <vector>
 #include <thread>
 
-template<class T>
-class FastQueue {
+template <class T>
+class MPMCBoundedQueue {
  private:
   struct Node;
 
  public:
-  explicit FastQueue(size_t size) : queue_(size), mod_(size - 1) {
+  explicit MPMCBoundedQueue(size_t size) : queue_(size), mod_(size - 1) {
     shift_ = 0;
     while (size > 1) {
       ++shift_;

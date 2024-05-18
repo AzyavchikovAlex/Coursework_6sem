@@ -10,15 +10,14 @@ template<typename T, typename M, typename P, size_t /*ThreadsCount*/ = 0>
 class AbstractTree {
  public:
   AbstractTree() = default;
-  explicit AbstractTree(P policy, size_t size)
-      : policy_(policy), array_size_(size) {}
+  explicit AbstractTree(P policy) : policy_(policy) {}
   virtual ~AbstractTree() = default;
 
   virtual void ModifyTree(size_t l, size_t r, M modifier) = 0;
 
   virtual T GetTreeState(size_t l, size_t r) = 0;
 
-  virtual std::future<T> GetFutureTreeState(size_t l, size_t r) {
+  virtual std::future<T> GetFutureTreeState(size_t l, size_t r)  {
     std::promise<T> result;
     result.set_value(GetTreeState(l, r));
     return result.get_future();
@@ -34,13 +33,6 @@ class AbstractTree {
     return policy_.GetModifiedState(init_state, values_count, modifier);
   }
 
-  size_t Size() const {
-    return array_size_;
-  }
-
  protected:
   P policy_;
-
- private:
-  size_t array_size_{};
 };

@@ -7,10 +7,7 @@ bench::duration bench::Measure(const std::function<void()>& command,
   int64_t count = 0;
   while (clock::now() < finish) {
     command();
-    command();
-    command();
-    command();
-    count += 4;
+    ++count;
   }
   finish = clock::now();
   return std::chrono::duration_cast<duration>(finish - start) / count;

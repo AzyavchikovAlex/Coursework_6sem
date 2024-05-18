@@ -6,16 +6,17 @@
 #include <mutex>
 #include <condition_variable>
 
-template <class T>
+template<class T>
 class BufferedChannel {
  public:
   explicit BufferedChannel(uint32_t size) : max_size_(size) {
   }
 
-  template <typename K>
+  template<typename K>
   void Send(K&& value) {
     std::unique_lock lock(global_);
-    send_cv_.wait(lock, [this]() { return is_closed_ || queue_.size() < max_size_; });
+    send_cv_.wait(lock,
+                  [this]() { return is_closed_ || queue_.size() < max_size_; });
     if (is_closed_) {
       throw std::runtime_error("Channel is closed");
     }

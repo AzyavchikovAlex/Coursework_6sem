@@ -12,18 +12,18 @@
 #include "Policies/AssignAndSum/assign_sum_slow_policy.h"
 #include "Benchmarks/bench.h"
 
-template <template<class T, class M, class P, size_t> class TreeType, size_t ThreadsCount>
-std::shared_ptr<AbstractTree<int, int, AssignSumPolicy<int>>> GetTree(const std::vector<int>& values) {
-  auto strategy = AssignSumPolicy<int>();
-  return std::make_shared<TreeType<int, int, decltype(strategy), ThreadsCount>>(values.begin(), values.end(), strategy);
-}
-
-template <template<class T, class M, class P, size_t> class TreeType, size_t ThreadsCount, uint duration>
-std::shared_ptr<AbstractTree<int, int, AssignSumSlowPolicy<int>>> GetSlowDataTree(const std::vector<int>& values) {
-  auto strategy = AssignSumSlowPolicy<int>();
-  strategy.SetDuration(duration);
-  return std::make_shared<TreeType<int, int, decltype(strategy), ThreadsCount>>(values.begin(), values.end(), strategy);
-}
+// template <template<class T, class M, class P, size_t> class TreeType, size_t ThreadsCount>
+// std::shared_ptr<AbstractTree<int, int, AssignSumPolicy<int>>> GetTree(const std::vector<int>& values) {
+//   auto strategy = AssignSumPolicy<int>();
+//   return std::make_shared<TreeType<int, int, decltype(strategy), ThreadsCount>>(values.begin(), values.end(), strategy);
+// }
+//
+// template <template<class T, class M, class P, size_t> class TreeType, size_t ThreadsCount, uint duration>
+// std::shared_ptr<AbstractTree<int, int, AssignSumSlowPolicy<int>>> GetSlowDataTree(const std::vector<int>& values) {
+//   auto strategy = AssignSumSlowPolicy<int>();
+//   strategy.SetDuration(duration);
+//   return std::make_shared<TreeType<int, int, decltype(strategy), ThreadsCount>>(values.begin(), values.end(), strategy);
+// }
 
 template <template<class T, class M, class P, size_t> class TreeType>
 void SimpleTest() {
@@ -115,8 +115,8 @@ template <template<class T, class M, class P, size_t> class TreeType, size_t Thr
 void SlowDataBenchmarkTest() {
   size_t n = 1e7;
   std::vector<int> values(n);
-  auto tree = GetSlowDataTree<TreeType, ThreadsCount, 100>(values);
-  auto fast_tree = GetSlowDataTree<Tree, ThreadsCount, 100>(values);
+  auto tree = GetSlowDataTree<TreeType, ThreadsCount>(values);
+  auto fast_tree = GetSlowDataTree<Tree, ThreadsCount>(values);
 
   auto t1 = bench::Measure([&tree, n]() {
     tree->ModifyTree(1, n - 1, 1);

@@ -14,10 +14,9 @@ class Tree : public AbstractTree<T, M, P> {
   Tree() = default;
   template<class Iter>
   explicit Tree(Iter begin, Iter end, P policy)
-      : AbstractTree<T, M, P>(std::move(policy)), size_(ProperSize(std::distance(begin, end))) {
-    // size_ = ProperSize(std::distance(begin, end));
+      : AbstractTree<T, M, P>(std::move(policy), std::distance(begin, end)), size_(ProperSize(this->Size())) {
     tree_ = std::vector<Node>(2 * size_, {this->GetNullState(), M(), false});
-    Build(begin, std::distance(begin, end), 0, 0, size_);
+    Build(begin, this->Size(), 0, 0, size_);
   }
 
   void ModifyTree(size_t l, size_t r, M modifier) override {
